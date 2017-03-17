@@ -4,7 +4,7 @@ import sys
 reload(sys)
 sys.setdefaultencoding('utf-8')
 import tensorflow as tf
-from tensorflow.python.ops import rnn, rnn_cell
+from tensorflow.contrib import rnn
 from tensorflow.python.framework import dtypes
 import numpy as np
 import data_utils
@@ -53,19 +53,22 @@ class Model(object):
         '''创建embedding表和embedding之后的输入; create embedding and embedded inputs'''
         with tf.device("/cpu:0"):# embedding lookup only works with cpu
             embedding = tf.get_variable("embedding", [self.vocab_size, self.embedding_size])
-            embedded_encoder_inputs = tf.unpack(tf.nn.embedding_lookup(embedding,self.encoder_inputs))# embedding_lookup function gets a sequence's embedded representation
-            embedded_decoder_inputs = tf.unpack(tf.nn.embedding_lookup(embedding,self.decoder_inputs))
+            embedded_encoder_inputs = tf.unstack(tf.nn.embedding_lookup(embedding,self.encoder_inputs))# embedding_lookup function gets a sequence's embedded representation
+            embedded_decoder_inputs = tf.unstack(tf.nn.embedding_lookup(embedding,self.decoder_inputs))
 
         '''创建rnn神经元; create rnn cell'''
-        cell = tf.nn.rnn_cell.BasicLSTMCell(self.state_size,state_is_tuple=True)
+        cell = tf.contrib.rnn.BasicLSTMCell(self.state_size, state_is_tuple=True)
+        # cell = tf.nn.rnn_cell.BasicLSTMCell(self.state_size,state_is_tuple=True)
         if cell_type =='gru':
-            cell = tf.nn.rnn_cell.GRUCell(self.state_size)
+            # cell = tf.nn.rnn_cell.GRUCell(self.state_size)
+            cell = tf.contrib.rnn.BasicLSTMCell(self.state_size)
         if self.num_layers>1:
-            cell = tf.nn.rnn_cell.MultiRNNCell([cell] * self.num_layers)
+            # cell = tf.nn.rnn_cell.MultiRNNCell([cell] * self.num_layers)
+            cell = tf.contrib.rnn.MultiRNNCell([cell] * self.num_layers)
 
         '''创建编码结果; create encoder result'''
         # here we encode the sequences to encoder_states, note that the encoder_state of a sequence is [num_layers*state_size] dimentional because it records all layers' states
-        encoder_outputs, self.encoder_states = rnn.rnn(cell, embedded_encoder_inputs,sequence_length = self.encoder_lengths,dtype = dtypes.float32)
+        encoder_outputs, self.encoder_states = tf.nn.dynamic_rnn(cell, embedded_encoder_inputs,sequence_length = self.encoder_lengths,dtype = dtypes.float32)
 
         '''创建解码结果; create decoder result'''
         # weiredly, we need a loop_function here, because:
@@ -153,6 +156,8 @@ class Model(object):
         with tf.Session() as session:
             self.initilize(model_dir,session)
             iteration = 0
+            # summary writer for tensorboard
+            summary_writer = tf.summary.FileWriter(logs_path, graph=session.graph)
 
             while True:
                 iteration +=1
@@ -160,12 +165,16 @@ class Model(object):
                 # a train step
                 encoder_inputs,decoder_inputs, encoder_lengths, decoder_weights= self.get_batch(train_set,batch_size)
                 _, _, step_loss = self.step(encoder_inputs,decoder_inputs, encoder_lengths, decoder_weights, True ,session)
+                tf.summary.scalar("step_loss", step_loss)
+                merged_summary_op = tf.summary.merge_all()
+                summary = session.run([merged_summary_op])
+                summary_writer.add_summary(summary, iteration)
                 finish = time.time()
                 print "global-step %d loss %.5f time %.2f"%(self.global_step.eval(),step_loss,finish-start)
                 if self.global_step.eval()%step_per_checkpoint==0:
                     # at checkpoint we do validation and save.
                     validation_loss = 0.0
-                    validation_batch_size = 10240 # larger batch_size in validation for efficiency.
+                    validation_batch_size = 10240 # lagger batch_size in validation for efficiency.
                     for i in xrange(int(np.ceil(1.0*len(validation_set)/validation_batch_size))):# constant permutation of batches in validation for consistency
                         start = i*validation_batch_size
                         end = min((i+1)*validation_batch_size,len(validation_set))

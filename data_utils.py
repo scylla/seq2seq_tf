@@ -55,6 +55,7 @@ def sentence_to_token_ids(sentence, vocabulary):
     return [vocabulary.get(w, UNK_ID) for w in words]
 
 def data_to_token_ids(data_path, ids_path, vocabulary_path):
+    data_path = 'data/token'
     if not gfile.Exists(ids_path):
         print("Tokenizing data in %s" % data_path)
         vocab, _ = initialize_vocabulary(vocabulary_path)
@@ -70,6 +71,7 @@ def data_to_token_ids(data_path, ids_path, vocabulary_path):
                         " ".join([str(tok) for tok in token_ids]) + "\n")
 
 def prepare_data(data_path,vocab_size):
+    data_path = 'data/token'
     # Get wmt data to the specified directory.
     data_dir = os.path.realpath(data_path).split('/')[-2]
     data_name = os.path.realpath(data_path).split('/')[-1]

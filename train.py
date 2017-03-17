@@ -33,6 +33,7 @@ def main():
     arg('--checkpoint-step', type=int, default=100, help='do validation and save after each this many of steps.')
     args = parser.parse_args()
 
+
     '''prepare data'''
     ids_path,vocab_path = data_utils.prepare_data(args.data_path, args.vocab_size)
     data_set = []
@@ -56,6 +57,7 @@ def main():
     '''create model'''
     model = seq2seq_autoencoder_model.Model(args.vocab_size,args.embedding_size, args.state_size, args.num_layers, args.num_samples, args.max_seq_length, args.max_gradient_norm, args.cell, args.optimizer, args.learning_rate)
 
+    args.model_path = 'train/'
     '''fit model'''
     if not os.path.exists(args.model_path):
         os.mkdir(args.model_path)
